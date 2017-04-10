@@ -15,7 +15,7 @@ DEFAULT_BOARD = [
 ]
 # @formatter:on
 
-BOARD_SIZE = 8  
+BOARD_SIZE = 8
 BOARD_ITERATOR = range(BOARD_SIZE)
 EMPTY = 0
 BORDER = 2
@@ -181,7 +181,6 @@ def play(board, side):
 
     final_piece = final_points[max(final_points)]
     apply_move(all_moves[final_piece], final_piece, board, side)
-    return board
 
 def draw_board(display, sprites, board):
     for y in BOARD_ITERATOR:
@@ -194,7 +193,7 @@ def draw_board(display, sprites, board):
 def main():
     display = pygame.display.set_mode([TILE_SIZE * 8 + MARGIN * 2 for _ in range(2)])
     clock = pygame.time.Clock()
-    sprite_sheet = BlockSheet("SpriteSheet.png", SCALE_FACTOR, PIECE_SIZE)
+    sprite_sheet = BlockSheet("spritesheet.png", SCALE_FACTOR, PIECE_SIZE)
     sprites = {}
     for side in (1, -1):
         temp_sprites = sprite_sheet.get_blocks(len(PIECES))
@@ -210,7 +209,7 @@ def main():
             draw_board(display, sprites, board)
             pygame.display.update()
             clock.tick(FRAME_RATE)
-            board = play(board, side)
+            play(board, side)
 
 if __name__ == '__main__':
     main()
