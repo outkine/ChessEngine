@@ -28,11 +28,11 @@ KING_VECTORS = ((-1, -1), (0, -1), (1, -1),
                 (-1, 1), (0, 1), (1, 1))
 BISHOP_VECTORS = ((-1, -1), (-1, 1), (1, 1), (1, -1))
 ROOK_VECTORS = ((-1, 0), (1, 0), (0, -1), (0, 1))
-BROAD_CENTER = {(3, 3), (4, 3), (5, 3), (6, 3),
-                (3, 4), (4, 4), (5, 4), (6, 4),
-                (3, 5), (4, 5), (5, 5), (6, 5),
-                (3, 6), (4, 6), (5, 6), (6, 6)}
-CENTER = {(4, 4), (5, 4), (4, 5), (5, 5)}
+BROAD_CENTER = {(2, 2), (3, 2), (4, 2), (5, 2),
+                (2, 3), (5, 3),
+                (2, 4), (5, 4),
+                (2, 5), (3, 5), (4, 5), (5, 5)}
+CENTER = {(3, 3), (3, 4), (4, 3), (4, 4)}
 PAWN_STARTS = (None, 1, 6)
 
 ACQUIRE_BONUS = 4
@@ -44,12 +44,14 @@ PIECES = ('p', 'n', 'b', 'r', 'q', 'k')
 PIECE_VALUES = {'p': 1, 'n': 3, 'b': 3, 'r': 5, 'q': 9, 'k': 100}
 PIECE_POINTS = {key: PIECE_VALUES[key] * ACQUIRE_BONUS for key in PIECE_VALUES}
 
-SCALE_FACTOR = 3
+SCALE_FACTOR = 5
 BACKGROUND_COLOR = (255, 255, 255)
 FRAME_RATE = 1
 PIECE_SIZE = (7, 14)
-TILE_SIZE = 43
+TILE_SIZE = 120
 MARGIN = 20
+NUMBER_SCALE_FACTOR = 2
+NUMBER_GAP = 20
 
 def find_state(pos, board):
     return board[pos[1]][pos[0]][0]
@@ -57,82 +59,112 @@ def find_state(pos, board):
 def find_type(pos, board):
     return board[pos[1]][pos[0]][1]
 
-def safe_find_state(pos, board):
+def within_bounds(pos):
     if 0 <= pos[0] < BOARD_SIZE and 0 <= pos[1] < BOARD_SIZE:
+        return True
+    return False
+
+def safe_find_state(pos, board):
+    if within_bounds(pos):
         return board[pos[1]][pos[0]][0]
     return BORDER
 
-def pawn(loc, board, side):
+def pawn_move(loc, board, side):
     moves = []
-    stoppers = []
     for x in (-1, 1):
         pos = (x + loc[0], side + loc[1])
         if safe_find_state(pos, board) == side * -1:
             moves.append(pos)
     pos = (loc[0], loc[1] + side)
-    tile_state = safe_find_state(pos, board)
-    if tile_state == EMPTY:
+    if safe_find_state(pos, board) == EMPTY:
         moves.append(pos)
         if loc[1] == PAWN_STARTS[side]:
             pos = (loc[0], loc[1] + 2 * side)
-            tile_state = find_state(pos, board)
-            if tile_state == EMPTY:
+            if find_state(pos, board) == EMPTY:
                 moves.append(pos)
-            elif tile_state == side:
-                stoppers.append(pos)
-    elif tile_state == side:
-        stoppers.append(pos)
+    return moves
 
-    return moves, stoppers
+def pawn_attack(loc, board, side):
+    return [(x + loc[0], side + loc[1]) for x in (-1, 1)]
 
-def jump_piece(loc, board, side, vectors):
+def jump_piece_move(loc, board, side, vectors):
     moves = []
-    stoppers = []
-    opposite_side = side * -1
     for vector in vectors:
         pos = (loc[0] + vector[0], loc[1] + vector[1])
-        tile_state = safe_find_state(pos, board)
-        if tile_state in (EMPTY, opposite_side):
+        if safe_find_state(pos, board) not in (BORDER, side):
             moves.append(pos)
-        elif tile_state == side:
-            stoppers.append(pos)
-    return moves, stoppers
+    return moves
 
-def knight(loc, board, side):
-    return jump_piece(loc, board, side, KNIGHT_VECTORS)
+def knight_move(loc, board, side):
+    return jump_piece_move(loc, board, side, KNIGHT_VECTORS)
 
-def king(loc, board, side):
-    return jump_piece(loc, board, side, KING_VECTORS)
+def king_move(loc, board, side):
+    return jump_piece_move(loc, board, side, KING_VECTORS)
 
-def vector_piece(loc, board, side, vectors):
+def jump_piece_attack(loc, vectors):
+    attacks = []
+    for vector in vectors:
+        pos = (loc[0] + vector[0], loc[1] + vector[1])
+        if within_bounds(pos):
+            attacks.append(pos)
+    return attacks
+
+def knight_attack(loc, board, side):
+    return jump_piece_attack(loc, KNIGHT_VECTORS)
+
+def king_attack(loc, board, side):
+    return jump_piece_attack(loc, KING_VECTORS)
+
+def vector_piece_move(loc, board, side, vectors):
     moves = []
-    stoppers = []
     for vector in vectors:
         pos = loc
         while True:
             pos = (pos[0] + vector[0], pos[1] + vector[1])
             tile_state = safe_find_state(pos, board)
             if tile_state in (BORDER, side):
-                if tile_state == side:
-                    stoppers.append(tile_state)
                 break
             moves.append(pos)
             if tile_state != EMPTY:
                 break
-    return moves, stoppers
+    return moves
 
-def bishop(loc, board, side):
-    return vector_piece(loc, board, side, BISHOP_VECTORS)
+def bishop_move(loc, board, side):
+    return vector_piece_move(loc, board, side, BISHOP_VECTORS)
 
-def rook(loc, board, side):
-    return vector_piece(loc, board, side, ROOK_VECTORS)
+def rook_move(loc, board, side):
+    return vector_piece_move(loc, board, side, ROOK_VECTORS)
 
-def queen(loc, board, side):
-    bishop_moves, bishop_stoppers = bishop(loc, board, side)
-    rook_moves, rook_stoppers = rook(loc, board, side)
-    return bishop_moves + rook_moves, bishop_stoppers + rook_stoppers
+def queen_move(loc, board, side):
+    return bishop_move(loc, board, side) + rook_move(loc, board, side)
 
-def shallow_analyze(move, board, side):
+def vector_piece_attack(loc, board, vectors):
+    attacks = []
+    for vector in vectors:
+        pos = loc
+        while True:
+            pos = (pos[0] + vector[0], pos[1] + vector[1])
+            tile_state = safe_find_state(pos, board)
+            if tile_state == BORDER:
+                break
+            attacks.append(pos)
+            if tile_state != EMPTY:
+                break
+    return attacks
+
+def bishop_attack(loc, board, side):
+    return vector_piece_attack(loc, board, BISHOP_VECTORS)
+
+def rook_attack(loc, board, side):
+    return vector_piece_attack(loc, board, ROOK_VECTORS)
+
+def queen_attack(loc, board, side):
+    return bishop_attack(loc, board, side) + rook_attack(loc, board, side)
+
+PIECE_MOVE_FUNCTIONS = {'p': pawn_move, 'n': knight_move, 'b': bishop_move, 'r': rook_move, 'q': queen_move, 'k': king_move}
+PIECE_ATTACK_FUNCTIONS = {'p': pawn_attack, 'n': knight_attack, 'b': bishop_attack, 'r': rook_attack, 'q': queen_attack, 'k': king_attack}
+
+def analyze_move_target(move, origin, board, ally_attacks, enemy_attacks):
     points = 0
     tile_state = find_state(move, board)
     if tile_state != EMPTY:
@@ -141,75 +173,95 @@ def shallow_analyze(move, board, side):
         points += CENTER_BONUS
     elif move in BROAD_CENTER:
         points += BROAD_CENTER_BONUS
+    enemy_number = enemy_attacks.count(move)
+    if enemy_number > 0:
+        ally_number = ally_attacks.count(move) - 1
+        if ally_number < enemy_number:
+            points -= PIECE_POINTS[find_type(origin, board)]
     return points
+
+def analyze_move_source(move, origin, board, side, ally_stoppers, enemy_moves):
+    return 0
 
 def apply_move(move, origin, board, side):
     board[move[1]][move[0]] = (side, find_type(origin, board))
     board[origin[1]][origin[0]] = (EMPTY,)
 
 def play(board, side):
-    all_moves = {}
-    # stoppers = {}
-    points = {}
+    enemy_attacks = []
+    ally_attacks = []
+    ally_moves = {}
+    for i_side in (side * -1, side):
+        for y in BOARD_ITERATOR:
+            for x in BOARD_ITERATOR:
+                if find_state((x, y), board) == i_side:
+                    piece_type = find_type((x, y), board)
+                    if i_side == side:
+                        moves = PIECE_MOVE_FUNCTIONS[piece_type]((x, y), board, i_side)
+                        if moves:
+                            ally_moves[(x, y)] = moves
+                        attacks = PIECE_ATTACK_FUNCTIONS[piece_type]((x, y), board, i_side)
+                        if attacks:
+                            ally_attacks.extend(attacks)
+                    else:
+                        attacks = PIECE_ATTACK_FUNCTIONS[piece_type]((x, y), board, i_side)
+                        if attacks:
+                            enemy_attacks.extend(attacks)
+
+    print("ally")
+    print(ally_attacks)
+    print("enemy")
+    print(enemy_attacks)
+    print("moves")
+    print(ally_moves)
+
+    all_points = {}
+    for (x, y) in ally_moves:
+        temp_points = {}
+        for move in ally_moves[(x, y)]:
+            temp_points[analyze_move_target(move, (x, y), board, ally_attacks, enemy_attacks)] = move
+        max_points = max(temp_points)
+        print((x, y), temp_points[max_points], max_points)
+        ally_moves[(x, y)] = temp_points[max_points]
+        points = analyze_move_source(move, (x, y), board, side, ally_attacks, enemy_attacks) + max_points
+        all_points[points] = (x, y)
+
+    final_piece = all_points[max(all_points)]
+    apply_move(ally_moves[final_piece], final_piece, board, side)
+    print("#################################")
+
+def draw_board(display, piece_sprites, number_sprites, board):
     for y in BOARD_ITERATOR:
         for x in BOARD_ITERATOR:
-            if find_state((x, y), board) == side:
-                tile_type = find_type((x, y), board)
-                if tile_type == 'p':
-                    moves, stoppers = pawn((x, y), board, side)
-                elif tile_type == 'n':
-                    moves, stoppers = knight((x, y), board, side)
-                elif tile_type == 'b':
-                    moves, stoppers = bishop((x, y), board, side)
-                elif tile_type == 'q':
-                    moves, stoppers = queen((x, y), board, side)
-                elif tile_type == 'r':
-                    moves, stoppers = rook((x, y), board, side)
-                elif tile_type == 'k':
-                    moves, stoppers = king((x, y), board, side)
-                if moves:
-                    temp_points = {}
-                    for move in moves:
-                        temp_points[shallow_analyze(move, board, side)] = move
-                    max_points = max(temp_points)
-                    points[(x, y)] = max_points
-                    all_moves[(x, y)] = temp_points[max_points]
-
-    final_points = {}
-    for x, y in all_moves:
-        final_points[points[(x, y)]] = (x, y)
-
-    final_piece = final_points[max(final_points)]
-    apply_move(all_moves[final_piece], final_piece, board, side)
-
-def draw_board(display, sprites, board):
-    for y in BOARD_ITERATOR:
-        for x in BOARD_ITERATOR:
+            coordinates = (x * TILE_SIZE + MARGIN, y * TILE_SIZE + MARGIN)
+            display.blit(number_sprites[x], coordinates)
+            display.blit(number_sprites[y], (coordinates[0] + NUMBER_GAP, coordinates[1]))
             tile_state = find_state((x, y), board)
             if tile_state != EMPTY:
-                sprite = sprites[tile_state][find_type((x, y), board)]
-                display.blit(sprite, (x * TILE_SIZE + MARGIN, y * TILE_SIZE + MARGIN))
+                sprite = piece_sprites[tile_state][find_type((x, y), board)]
+                display.blit(sprite, coordinates)
 
 def main():
     display = pygame.display.set_mode([TILE_SIZE * 8 + MARGIN * 2 for _ in range(2)])
-    clock = pygame.time.Clock()
     sprite_sheet = BlockSheet("spritesheet.png", SCALE_FACTOR, PIECE_SIZE)
-    sprites = {}
+    piece_sprites = {}
     for side in (1, -1):
         temp_sprites = sprite_sheet.get_blocks(len(PIECES))
-        sprites[side] = {piece: temp_sprites[i] for i, piece in enumerate(PIECES)}
+        piece_sprites[side] = {piece: temp_sprites[i] for i, piece in enumerate(PIECES)}
+    number_sprites = sprite_sheet.get_custom_blocks((7, 7), 10, scale=NUMBER_SCALE_FACTOR)
     board = list(DEFAULT_BOARD)
 
+    side = -1
     while True:
-        for side in (-1, 1):
-            for event in pygame.event.get():
-                if event.type == pygame.QUIT:
-                    quit()
-            display.fill(BACKGROUND_COLOR)
-            draw_board(display, sprites, board)
-            pygame.display.update()
-            clock.tick(FRAME_RATE)
-            play(board, side)
+        for event in pygame.event.get():
+            if event.type == pygame.QUIT:
+                quit()
+            elif event.type == pygame.KEYDOWN:
+                play(board, side)
+                side *= -1
+        display.fill(BACKGROUND_COLOR)
+        draw_board(display, piece_sprites, number_sprites, board)
+        pygame.display.update()
 
 if __name__ == '__main__':
     main()

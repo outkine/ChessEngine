@@ -42,9 +42,7 @@ class SpriteSheet:
             sprites.append(self.get_image(dimensions, x, scale))
             x += dimensions[0]
         if update:
-            self.farthest_y += max(
-                [i_dimensions[1] for i_dimensions in dimensions]
-            )
+            self.farthest_y += dimensions[1]
         return sprites
 
     def get_custom(self, dimensions, constant, index, x=0, scale=None, update=True):
