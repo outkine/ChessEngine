@@ -1,5 +1,6 @@
 import pygame
 from spritesheet import BlockSheet
+from math import log, sqrt
 
 # @formatter:off
 DEFAULT_BOARD = [
@@ -35,9 +36,10 @@ BROAD_CENTER = {(2, 2), (3, 2), (4, 2), (5, 2),
 CENTER = {(3, 3), (3, 4), (4, 3), (4, 4)}
 PAWN_STARTS = (None, 1, 6)
 
-ACQUIRE_BONUS = 4
+ACQUIRE_BONUS = 5
 BROAD_CENTER_BONUS = 1
 CENTER_BONUS = 2
+LIGHT_OPENING_BONUS = 1
 KING_BONUS = 2
 
 PIECES = ('p', 'n', 'b', 'r', 'q', 'k')
@@ -52,6 +54,15 @@ TILE_SIZE = 120
 MARGIN = 20
 NUMBER_SCALE_FACTOR = 2
 NUMBER_GAP = 20
+
+def find_turn_ratio(turn):
+    if turn > 9:
+        return 0
+    else:
+        return round(log(turn * -1 + 10, 10), 2)
+
+def distance(pos1, pos2):
+    return sqrt((pos2[1] - pos1[1]) ** 2 + (pos2[0] - pos1[0]) ** 2)
 
 def find_state(pos, board):
     return board[pos[1]][pos[0]][0]
@@ -164,20 +175,39 @@ def queen_attack(loc, board, side):
 PIECE_MOVE_FUNCTIONS = {'p': pawn_move, 'n': knight_move, 'b': bishop_move, 'r': rook_move, 'q': queen_move, 'k': king_move}
 PIECE_ATTACK_FUNCTIONS = {'p': pawn_attack, 'n': knight_attack, 'b': bishop_attack, 'r': rook_attack, 'q': queen_attack, 'k': king_attack}
 
-def analyze_move_target(move, origin, board, ally_attacks, enemy_attacks):
+def analyze_movement(move, origin, piece_type, piece_points, turn_ratio, king, distance_to_king):
+    print(move, ': ', end='')
+    points = 0
+    if piece_type in ('p', 'n', 'b'):
+        points += turn_ratio * LIGHT_OPENING_BONUS
+        print("light opening bonus, ", end='')
+        if origin not in CENTER and move in CENTER:
+            points += CENTER_BONUS
+            print("center bonus, ", end='')
+        elif origin not in BROAD_CENTER and move in BROAD_CENTER:
+            points += BROAD_CENTER_BONUS
+            print("broad center bonus, ", end='')
+    new_distance = distance(move, king)
+    if new_distance < distance_to_king:
+        points += KING_BONUS
+        print("king bonus, ", end='')
+    return points
+
+def analyze_exchanges(move, board, ally_attacks, enemy_attacks, piece_points):
     points = 0
     tile_state = find_state(move, board)
     if tile_state != EMPTY:
+        print("acquire bonus, ", end='')
         points += PIECE_POINTS[find_type(move, board)]
-    if move in CENTER:
-        points += CENTER_BONUS
-    elif move in BROAD_CENTER:
-        points += BROAD_CENTER_BONUS
-    enemy_number = enemy_attacks.count(move)
+
+    enemy_number = len(enemy_attacks.get(move, []))
     if enemy_number > 0:
-        ally_number = ally_attacks.count(move) - 1
-        if ally_number < enemy_number:
-            points -= PIECE_POINTS[find_type(origin, board)]
+        if piece_points > min(PIECE_POINTS[find_type(enemy, board)] for enemy in enemy_attacks[move]):
+            points -= piece_points
+            print("death penalty 1", end='')
+        elif len(ally_attacks.get(move, [])) <= enemy_number:
+            points -= piece_points
+            print("death penalty 2", end='')
     return points
 
 def analyze_move_source(move, origin, board, side, ally_stoppers, enemy_moves):
@@ -187,10 +217,12 @@ def apply_move(move, origin, board, side):
     board[move[1]][move[0]] = (side, find_type(origin, board))
     board[origin[1]][origin[0]] = (EMPTY,)
 
-def play(board, side):
-    enemy_attacks = []
-    ally_attacks = []
+def play(board, side, turn):
+    turn_ratio = find_turn_ratio(turn)
+    enemy_attacks = {}
+    ally_attacks = {}
     ally_moves = {}
+    enemy_king = None
     for i_side in (side * -1, side):
         for y in BOARD_ITERATOR:
             for x in BOARD_ITERATOR:
@@ -202,12 +234,17 @@ def play(board, side):
                             ally_moves[(x, y)] = moves
                         attacks = PIECE_ATTACK_FUNCTIONS[piece_type]((x, y), board, i_side)
                         if attacks:
-                            ally_attacks.extend(attacks)
+                            for attack in attacks:
+                                ally_attacks.setdefault(attack, []).append((x, y))
                     else:
                         attacks = PIECE_ATTACK_FUNCTIONS[piece_type]((x, y), board, i_side)
                         if attacks:
-                            enemy_attacks.extend(attacks)
+                            for attack in attacks:
+                                enemy_attacks.setdefault(attack, []).append((x, y))
+                        if piece_type == 'k':
+                            enemy_king = (x, y)
 
+    print(turn, turn_ratio)
     print("ally")
     print(ally_attacks)
     print("enemy")
@@ -215,13 +252,21 @@ def play(board, side):
     print("moves")
     print(ally_moves)
 
+
     all_points = {}
     for (x, y) in ally_moves:
+        piece_type = find_type((x, y), board)
+        piece_points = PIECE_POINTS[piece_type]
+        distance_to_king = distance((x, y), enemy_king)
+        print(piece_type, piece_points, (x, y), ":")
         temp_points = {}
         for move in ally_moves[(x, y)]:
-            temp_points[analyze_move_target(move, (x, y), board, ally_attacks, enemy_attacks)] = move
+            points = analyze_movement(move, (x, y), piece_type, piece_points, turn_ratio, enemy_king, distance_to_king)
+            points += analyze_exchanges(move, board, ally_attacks, enemy_attacks, piece_points)
+            print(points)
+            temp_points[points] = move
         max_points = max(temp_points)
-        print((x, y), temp_points[max_points], max_points)
+        print(temp_points[max_points], max_points)
         ally_moves[(x, y)] = temp_points[max_points]
         points = analyze_move_source(move, (x, y), board, side, ally_attacks, enemy_attacks) + max_points
         all_points[points] = (x, y)
@@ -252,12 +297,15 @@ def main():
     board = list(DEFAULT_BOARD)
 
     side = -1
+    turn = 0
     while True:
         for event in pygame.event.get():
             if event.type == pygame.QUIT:
                 quit()
             elif event.type == pygame.KEYDOWN:
-                play(board, side)
+                if side == -1:
+                    turn += 1
+                play(board, side, turn)
                 side *= -1
         display.fill(BACKGROUND_COLOR)
         draw_board(display, piece_sprites, number_sprites, board)
