@@ -1,16 +1,18 @@
 import pygame
 from spritesheet import BlockSheet
 from math import log, sqrt
+from copy import deepcopy
+
 
 # @formatter:off
 DEFAULT_BOARD = [
     # 0         1           2           3           4           5           6           7
     [(1, 'r'), 	(1, 'n'), 	(1, 'b'), 	(1, 'q'), 	(1, 'k'), 	(1, 'b'), 	(1, 'n'), 	(1, 'r'), 	],  # 0
     [(1, 'p'), 	(1, 'p'), 	(1, 'p'), 	(1, 'p'), 	(1, 'p'), 	(1, 'p'), 	(1, 'p'), 	(1, 'p'), 	],  # 1
-    [(0, 0), 	(0, 0), 	(0, 0), 	(0, 0), 	(0, 0), 	(0, 0), 	(0, 0), 	(0, 0), 	],  # 2
-    [(0, 0), 	(0, 0), 	(0, 0), 	(0, 0), 	(0, 0), 	(0, 0), 	(0, 0), 	(0, 0), 	],  # 3
-    [(0, 0), 	(0, 0), 	(0, 0), 	(0, 0), 	(0, 0), 	(0, 0), 	(0, 0), 	(0, 0), 	],  # 4
-    [(0, 0), 	(0, 0), 	(0, 0), 	(0, 0), 	(0, 0), 	(0, 0), 	(0, 0), 	(0, 0), 	],  # 5
+    [(0,),	 	(0,),	 	(0,),	 	(0,),	 	(0,),	 	(0,),	 	(0,),	 	(0,),	 	],  # 2
+    [(0,),	 	(0,),	 	(0,),	 	(0,),	 	(0,),	 	(0,),	 	(0,),	 	(0,),	 	],  # 3
+    [(0,),	 	(0,),	 	(0,),	 	(0,),	 	(0,),	 	(0,),	 	(0,),	 	(0,),	 	],  # 4
+    [(0,),	 	(0,),	 	(0,),	 	(0,),	 	(0,),	 	(0,),	 	(0,),	 	(0,),	 	],  # 5
     [(-1, 'p'), (-1, 'p'), 	(-1, 'p'), 	(-1, 'p'), 	(-1, 'p'), 	(-1, 'p'), 	(-1, 'p'), 	(-1, 'p'), 	],  # 6
     [(-1, 'r'), (-1, 'n'), 	(-1, 'b'), 	(-1, 'q'), 	(-1, 'k'), 	(-1, 'b'), 	(-1, 'n'), 	(-1, 'r'), 	],  # 7
 ]
@@ -41,6 +43,7 @@ BROAD_CENTER_BONUS = 1
 CENTER_BONUS = 2
 LIGHT_OPENING_BONUS = 1
 KING_BONUS = 2
+SIMULATION_LEVEL = 5
 
 PIECES = ('p', 'n', 'b', 'r', 'q', 'k')
 PIECE_VALUES = {'p': 1, 'n': 3, 'b': 3, 'r': 5, 'q': 9, 'k': 100}
@@ -54,6 +57,14 @@ TILE_SIZE = 120
 MARGIN = 20
 NUMBER_SCALE_FACTOR = 2
 NUMBER_GAP = 20
+
+display = pygame.display.set_mode([TILE_SIZE * 8 + MARGIN * 2 for _ in range(2)])
+sprite_sheet = BlockSheet("spritesheet.png", SCALE_FACTOR, PIECE_SIZE)
+piece_sprites = {}
+for side in (1, -1):
+    temp_sprites = sprite_sheet.get_blocks(len(PIECES))
+    piece_sprites[side] = {piece: temp_sprites[i] for i, piece in enumerate(PIECES)}
+number_sprites = sprite_sheet.get_custom_blocks((7, 7), 10, scale=NUMBER_SCALE_FACTOR)
 
 def find_turn_ratio(turn):
     if turn > 9:
@@ -214,98 +225,178 @@ def analyze_move_source(move, origin, board, side, ally_stoppers, enemy_moves):
     return 0
 
 def apply_move(move, origin, board, side):
-    board[move[1]][move[0]] = (side, find_type(origin, board))
-    board[origin[1]][origin[0]] = (EMPTY,)
+    temp_board = deepcopy(board)
+    temp_board[move[1]][move[0]] = (side, find_type(origin, board))
+    temp_board[origin[1]][origin[0]] = (EMPTY,)
+    display.fill(BACKGROUND_COLOR)
+    draw_board(display, piece_sprites, number_sprites, temp_board)
+    pygame.display.update()
+    return temp_board
 
-def play(board, side, turn):
-    turn_ratio = find_turn_ratio(turn)
-    enemy_attacks = {}
-    ally_attacks = {}
-    ally_moves = {}
-    enemy_king = None
-    for i_side in (side * -1, side):
-        for y in BOARD_ITERATOR:
-            for x in BOARD_ITERATOR:
-                if find_state((x, y), board) == i_side:
-                    piece_type = find_type((x, y), board)
-                    if i_side == side:
-                        moves = PIECE_MOVE_FUNCTIONS[piece_type]((x, y), board, i_side)
-                        if moves:
-                            ally_moves[(x, y)] = moves
-                        attacks = PIECE_ATTACK_FUNCTIONS[piece_type]((x, y), board, i_side)
-                        if attacks:
-                            for attack in attacks:
-                                ally_attacks.setdefault(attack, []).append((x, y))
-                    else:
-                        attacks = PIECE_ATTACK_FUNCTIONS[piece_type]((x, y), board, i_side)
-                        if attacks:
-                            for attack in attacks:
-                                enemy_attacks.setdefault(attack, []).append((x, y))
-                        if piece_type == 'k':
-                            enemy_king = (x, y)
+# def update_attacks_2(attacks, removal, addition_attacks, addition_attacker):
+#     for attacker in list(attacks):
+#         if removal in attacks[attacker]:
+#             attacks[attacker].remove(removal)
+#         if not len(attacks[attacker]):
+#             del attacks[attacker]
+#     for attack in addition_attacks:
+#         if attack in attacks:
+#             if addition_attacker not in attacks[attack]:
+#                 attacks[attack].append(addition_attacker)
+#         else:
+#             attacks[attack] = [addition_attacker]
 
-    print(turn, turn_ratio)
-    print("ally")
-    print(ally_attacks)
-    print("enemy")
-    print(enemy_attacks)
-    print("moves")
-    print(ally_moves)
+def analyze(board, side):
+    # TODO test speed of dict vs list
+    scores = {1:0, -1:0}
+    for y in BOARD_ITERATOR:
+        for x in BOARD_ITERATOR:
+            if find_state((x, y), board) != EMPTY:
+                scores[find_state((x, y), board)] += PIECE_VALUES[find_type((x, y), board)]
+    return scores[side] - scores[side * -1]
 
+def play(board, side, level=1):
+    moves = {}
+    for y in BOARD_ITERATOR:
+        for x in BOARD_ITERATOR:
+            if find_state((x, y), board) == side:
+                temp_moves = PIECE_MOVE_FUNCTIONS[find_type((x, y), board)]((x, y), board, side)
+                if temp_moves:
+                    moves[(x, y)] = temp_moves
 
-    all_points = {}
-    for (x, y) in ally_moves:
-        piece_type = find_type((x, y), board)
-        piece_points = PIECE_POINTS[piece_type]
-        distance_to_king = distance((x, y), enemy_king)
-        print(piece_type, piece_points, (x, y), ":")
-        temp_points = {}
-        for move in ally_moves[(x, y)]:
-            points = analyze_movement(move, (x, y), piece_type, piece_points, turn_ratio, enemy_king, distance_to_king)
-            points += analyze_exchanges(move, board, ally_attacks, enemy_attacks, piece_points)
-            print(points)
-            temp_points[points] = move
-        max_points = max(temp_points)
-        print(temp_points[max_points], max_points)
-        ally_moves[(x, y)] = temp_points[max_points]
-        points = analyze_move_source(move, (x, y), board, side, ally_attacks, enemy_attacks) + max_points
-        all_points[points] = (x, y)
+    if level == SIMULATION_LEVEL:
+        points = []
+        for piece in moves:
+            temp_points = []
+            # print('piece')
+            for move in moves[piece]:
+                # print(piece, move)
+                temp_points.append(analyze(apply_move(move, piece, board, side), side))
+            points.append(max(temp_points))
+        return max(points)
 
-    final_piece = all_points[max(all_points)]
-    apply_move(ally_moves[final_piece], final_piece, board, side)
-    print("#################################")
+    elif level > 1:
+        points = 0
+        for piece in moves:
+            temp_points = 0
+            for move in moves[piece]:
+                # print(piece, move)
+                temp_points += play(apply_move(move, piece, board, side), side * -1, level + 1)
+            points += temp_points / len(moves[piece])
+        return points / len(moves)
+
+    else:
+        points = {}
+        piece_count = 0
+        for piece in moves:
+            piece_count += 1
+            print(piece_count / len(moves))
+            temp_points = {}
+            for move in moves[piece]:
+                temp_points[play(apply_move(move, piece, board, side), side * -1, level + 1)] = move
+            max_points = max(temp_points)
+            points[max_points] = piece
+            moves[piece] = temp_points[max_points]
+        final_piece = points[max(points)]
+        print(1)
+        return apply_move(moves[final_piece], final_piece, board, side)
+
+# def play(board, side, turn):
+#     turn_ratio = find_turn_ratio(turn)
+#     ally_moves = {}
+#     ally_attacks = {}
+#     enemy_attacks = {}
+#     enemy_king = None
+#     for i_side in (side * -1, side):
+#         for y in BOARD_ITERATOR:
+#             for x in BOARD_ITERATOR:
+#                 tile_state = find_state((x, y), board)
+#                 if tile_state == i_side:
+#                     piece_type = find_type((x, y), board)
+#                     if i_side == side:
+#                         moves = PIECE_MOVE_FUNCTIONS[piece_type]((x, y), board, i_side)
+#                         if moves:
+#                             ally_moves[(x, y)] = moves
+#                         attacks = PIECE_ATTACK_FUNCTIONS[piece_type]((x, y), board, i_side)
+#                         if attacks:
+#                             for attack in attacks:
+#                                 ally_attacks.setdefault(attack, []).append((x, y))
+#                     else:
+#                         # if (x, y) not in enemy_attacks_1:
+#                         #     enemy_attacks[(x, y)] = PIECE_ATTACK_FUNCTIONS[piece_type]((x, y), board, i_side)
+#                         attacks = PIECE_ATTACK_FUNCTIONS[piece_type]((x, y), board, i_side)
+#                         if attacks:
+#                             for attack in attacks:
+#                                 enemy_attacks.setdefault(attack, []).append((x, y))
+#                         if piece_type == 'k':
+#                             enemy_king = (x, y)
+#                 # elif tile_state == EMPTY:
+#                 #     if (x, y) in enemy_attacks:
+#                 #         del enemy_attacks[(x, y)]
+#                 #     elif (x, y) in ally_attacks:
+#                 #         del ally_attacks[(x, y)]
+#
+#     print(turn, turn_ratio)
+#     print("ally")
+#     print(ally_attacks)
+#     print("enemy")
+#     print(enemy_attacks)
+#     print("moves")
+#     print(ally_moves)
+#
+#     # for attack in enemy_attacks:
+#     #     if find_type(attack, board) == side:
+#
+#     all_points = {}
+#     for (x, y) in ally_moves:
+#         piece_type = find_type((x, y), board)
+#         piece_points = PIECE_POINTS[piece_type]
+#         distance_to_king = distance((x, y), enemy_king)
+#         print(piece_type, piece_points, (x, y), ":")
+#         temp_points = {}
+#         for move in ally_moves[(x, y)]:
+#             points = analyze_movement(move, (x, y), piece_type, piece_points, turn_ratio, enemy_king, distance_to_king)
+#             points += analyze_exchanges(move, board, ally_attacks, enemy_attacks, piece_points)
+#             print(points)
+#             temp_points[points] = move
+#         max_points = max(temp_points)
+#         print(temp_points[max_points], max_points)
+#         ally_moves[(x, y)] = temp_points[max_points]
+#         points = analyze_move_source(move, (x, y), board, side, ally_attacks, enemy_attacks) + max_points
+#         all_points[points] = (x, y)
+#
+#     final_piece = all_points[max(all_points)]
+#     apply_move(ally_moves[final_piece], final_piece, board, side)
+#     print("#################################")
 
 def draw_board(display, piece_sprites, number_sprites, board):
     for y in BOARD_ITERATOR:
         for x in BOARD_ITERATOR:
             coordinates = (x * TILE_SIZE + MARGIN, y * TILE_SIZE + MARGIN)
-            display.blit(number_sprites[x], coordinates)
-            display.blit(number_sprites[y], (coordinates[0] + NUMBER_GAP, coordinates[1]))
+            # display.blit(number_sprites[x], coordinates)
+            # display.blit(number_sprites[y], (coordinates[0] + NUMBER_GAP, coordinates[1]))
             tile_state = find_state((x, y), board)
             if tile_state != EMPTY:
                 sprite = piece_sprites[tile_state][find_type((x, y), board)]
                 display.blit(sprite, coordinates)
 
 def main():
-    display = pygame.display.set_mode([TILE_SIZE * 8 + MARGIN * 2 for _ in range(2)])
-    sprite_sheet = BlockSheet("spritesheet.png", SCALE_FACTOR, PIECE_SIZE)
-    piece_sprites = {}
-    for side in (1, -1):
-        temp_sprites = sprite_sheet.get_blocks(len(PIECES))
-        piece_sprites[side] = {piece: temp_sprites[i] for i, piece in enumerate(PIECES)}
-    number_sprites = sprite_sheet.get_custom_blocks((7, 7), 10, scale=NUMBER_SCALE_FACTOR)
+
     board = list(DEFAULT_BOARD)
 
     side = -1
-    turn = 0
+    # # turn = 0
+    # enemy_attacks_enemy_format = (None, {}, {})
+    # enemy_attacks_attack_format = (None, {}, {})
     while True:
         for event in pygame.event.get():
             if event.type == pygame.QUIT:
                 quit()
             elif event.type == pygame.KEYDOWN:
-                if side == -1:
-                    turn += 1
-                play(board, side, turn)
+                # if side == -1:
+                #     turn += 1
+                # play(board, side, turn, enemy_attacks_enemy_format[side], enemy_attacks_attack_format[side])
+                board = play(board, side)
                 side *= -1
         display.fill(BACKGROUND_COLOR)
         draw_board(display, piece_sprites, number_sprites, board)
