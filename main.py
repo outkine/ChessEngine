@@ -1,22 +1,5 @@
-import pygame
-from spritesheet import BlockSheet
 from math import sqrt
 from copy import deepcopy
-from time import time
-
-# @formatter:off
-DEFAULT_BOARD = [
-    # 0         1           2           3           4           5           6           7
-    [(1, 'r'), 	(1, 'n'), 	(1, 'b'), 	(1, 'q'), 	(1, 'k'), 	(1, 'b'), 	(1, 'n'), 	(1, 'r'), 	],  # 0
-    [(1, 'p'), 	(1, 'p'), 	(1, 'p'), 	(1, 'p'), 	(1, 'p'), 	(1, 'p'), 	(1, 'p'), 	(1, 'p'), 	],  # 1
-    [(0, 0),	(0, 0),	 	(0, 0),	 	(0, 0),	 	(0, 0),	 	(0, 0),	 	(0, 0),	 	(0, 0),	 	],  # 2
-    [(0, 0),	(0, 0),	 	(0, 0),	 	(0, 0),	 	(0, 0),	 	(0, 0),	 	(0, 0),	 	(0, 0),	 	],  # 3
-    [(0, 0),	(0, 0),	 	(0, 0),	 	(0, 0),	 	(0, 0),	 	(0, 0),	 	(0, 0),	 	(0, 0),	 	],  # 4
-    [(0, 0),	(0, 0),	 	(0, 0),	 	(0, 0),	 	(0, 0),	 	(0, 0),	 	(0, 0),	 	(0, 0),	 	],  # 5
-    [(-1, 'p'), (-1, 'p'), 	(-1, 'p'), 	(-1, 'p'), 	(-1, 'p'), 	(-1, 'p'), 	(-1, 'p'), 	(-1, 'p'), 	],  # 6
-    [(-1, 'r'), (-1, 'n'), 	(-1, 'b'), 	(-1, 'q'), 	(-1, 'k'), 	(-1, 'b'), 	(-1, 'n'), 	(-1, 'r'), 	],  # 7
-]
-# @formatter:on
 
 BOARD_SIZE = 8
 BOARD_ITERATOR = range(BOARD_SIZE)
@@ -43,28 +26,10 @@ BROAD_CENTER_BONUS = 1
 CENTER_BONUS = 2
 LIGHT_OPENING_BONUS = 1
 KING_BONUS = 2
-MAX_SIMULATION_LEVEL = 2
+MAX_SIMULATION_LEVEL = 4
 
-PIECES = ('p', 'n', 'b', 'r', 'q', 'k')
-PIECE_VALUES = {'p': 1, 'n': 3, 'b': 3, 'r': 5, 'q': 9, 'k': 20}
+PIECE_VALUES = {'p': 1, 'n': 3, 'b': 3.25, 'r': 5, 'q': 9, 'k': 20}
 PIECE_POINTS = {key: PIECE_VALUES[key] * ACQUIRE_BONUS for key in PIECE_VALUES}
-
-SCALE_FACTOR = 4
-BACKGROUND_COLOR = (255, 255, 255)
-FRAME_RATE = 1
-PIECE_SIZE = (7, 14)
-TILE_SIZE = 80
-MARGIN = 50
-NUMBER_SCALE_FACTOR = 2
-NUMBER_GAP = 15
-
-DISPLAY = pygame.display.set_mode([TILE_SIZE * 8 + MARGIN * 2 for _ in range(2)])
-SPRITE_SHEET = BlockSheet("spritesheet.png", SCALE_FACTOR, PIECE_SIZE)
-PIECE_SPRITES = {}
-for side in (1, -1):
-    temp_sprites = SPRITE_SHEET.get_blocks(len(PIECES))
-    PIECE_SPRITES[side] = {piece: temp_sprites[i] for i, piece in enumerate(PIECES)}
-NUMBER_SPRITES = SPRITE_SHEET.get_custom_blocks((7, 7), 10, scale=NUMBER_SCALE_FACTOR)
 
 def distance(pos1, pos2):
     return sqrt((pos2[1] - pos1[1]) ** 2 + (pos2[0] - pos1[0]) ** 2)
@@ -212,10 +177,14 @@ def analyze_exchanges(move, origin, piece_type, board, ally_attacks, enemy_attac
     return exchange_points, points
 
 def apply_move(move, origin, board, side):
-    temp_board = deepcopy(board)
+    temp_board = list(board)
+    temp_board[move[1]] = list(temp_board[move[1]])
     temp_board[move[1]][move[0]] = (side, find_type(origin, board))
-    temp_board[origin[1]][origin[0]] = (EMPTY, EMPTY)
-    return temp_board
+    temp_board[move[1]] = tuple(temp_board[move[1]])
+    temp_board[origin[1]] = list(temp_board[origin[1]])
+    temp_board[origin[1]][origin[0]] = (EMPTY,)
+    temp_board[origin[1]] = tuple(temp_board[origin[1]])
+    return tuple(temp_board)
 
 def analyze_board(board, side):
     # TODO test speed of dict vs list
@@ -252,8 +221,8 @@ def play(board, base_side, side, current_points=None, simulation_level=1):
                     if find_type((x, y), board) == 'k':
                         enemy_king = (x, y)
 
-    if simulation_level == MAX_SIMULATION_LEVEL and side == base_side:
-        print(current_points, end=' ')
+    if simulation_level == MAX_SIMULATION_LEVEL:
+        # print(current_points, end=' ')
         all_deep_exchange_points = []
         for piece in moves:
             piece_type = find_type(piece, board)
@@ -262,14 +231,14 @@ def play(board, base_side, side, current_points=None, simulation_level=1):
                 _, deep_exchange_points = analyze_exchanges(move, piece, piece_type, board, ally_attacks, enemy_attacks,
                                                             piece_points)
                 all_deep_exchange_points.append(deep_exchange_points)
-        print("MAX:", all_deep_exchange_points, max(all_deep_exchange_points))
-        return max(all_deep_exchange_points) + current_points
+        # print("MAX:", all_deep_exchange_points, max(all_deep_exchange_points))
+        return current_points + max(all_deep_exchange_points) * side * base_side
 
     else:
         final_moves = {}
         all_exchange_points = {}
 
-        print(current_points, "SIMULATED POINTS: ", end='')
+        # print(current_points, "SIMULATED POINTS: ", end='')
         for piece in moves:
             piece_type = find_type(piece, board)
             piece_points = PIECE_POINTS[piece_type]
@@ -277,44 +246,44 @@ def play(board, base_side, side, current_points=None, simulation_level=1):
                 exchange_points, deep_exchange_points = analyze_exchanges(move, piece, piece_type, board, ally_attacks,
                                                                           enemy_attacks,
                                                                           piece_points)
-                print(piece, move, exchange_points, deep_exchange_points, end=' ')
+                # print(piece, move, exchange_points, deep_exchange_points, end=' ')
                 if side != base_side and exchange_points == PIECE_POINTS['k']:
                     return current_points - PIECE_POINTS['k']
                 all_exchange_points[move] = exchange_points
                 if deep_exchange_points >= 0:
                     final_moves.setdefault(piece, []).append(move)
-        print()
+        # print()
 
         if simulation_level > 1:
-            if side == base_side:
-                simulation_level += 1
-
             final_points = []
-            # print("SIMULATED POINTS:", final_moves)
+            # # print("SIMULATED POINTS:", final_moves)
             for piece in final_moves:
                 for move in final_moves[piece]:
-                    print(piece, move, end=' ')
+                    # print(piece, move, end=' ')
                     final_points.append(play(apply_move(move, piece, board, side), base_side, side * -1,
                                              current_points + all_exchange_points[move] * base_side * side,
-                                             simulation_level))
-            return min(final_points)
+                                             simulation_level + 1))
+            if side * base_side == -1:
+                return min(final_points)
+            else:
+                return max(final_points)
 
         else:
             current_points = analyze_board(board, base_side)
-            print(current_points)
+            # print(current_points)
             final_points = {}
 
             for piece in final_moves:
                 for move in final_moves[piece]:
-                    print('PIECE:', piece, move, 'move,',
-                          all_exchange_points[move] * base_side * side, "exchange points")
+                    # print('PIECE:', piece, move, 'move,',
+                    #   all_exchange_points[move] * base_side * side, "exchange points")
                     temp_points = play(apply_move(move, piece, board, side), base_side, side * -1,
                                        current_points + all_exchange_points[move] * base_side * side,
                                        simulation_level + 1)
-                    print(temp_points, "final points")
+                    # print(temp_points, "final points")
                     final_points.setdefault(temp_points, {}).setdefault(piece, []).append(move)
 
-            print(final_points)
+            # print(final_points)
             max_final_points = final_points[max(final_points)]
             if len(max_final_points.values()) == 1:
                 piece, move = list(max_final_points.items())[0]
@@ -325,57 +294,6 @@ def play(board, base_side, side, current_points=None, simulation_level=1):
                 distance_to_king = distance(piece, enemy_king)
                 for move in max_final_points[piece]:
                     end_points[analyze_movement(move, piece, piece_type, enemy_king, distance_to_king)] = (piece, move)
-            print(end_points)
+            # print(end_points)
             piece, move = end_points[max(end_points)]
             return apply_move(move, piece, board, side)
-
-def draw_board(display, piece_sprites, number_sprites, board):
-    for y in BOARD_ITERATOR:
-        for x in BOARD_ITERATOR:
-            coordinates = (x * TILE_SIZE + MARGIN, y * TILE_SIZE + MARGIN)
-            display.blit(number_sprites[x], coordinates)
-            display.blit(number_sprites[y], (coordinates[0] + NUMBER_GAP, coordinates[1]))
-            tile_state = find_state((x, y), board)
-            if tile_state != EMPTY:
-                sprite = piece_sprites[tile_state][find_type((x, y), board)]
-                display.blit(sprite, coordinates)
-
-def main():
-    board = list(DEFAULT_BOARD)
-    side = -1
-    turn = 0
-    for x in range(50):
-        current_time = time()
-        board = play(board, side, side)
-        print("TIME TAKEN:", time() - current_time)
-        turn += 1
-        print(turn)
-        print("##############################################")
-        side *= -1
-    while True:
-        for event in pygame.event.get():
-            if event.type == pygame.QUIT:
-                quit()
-            elif event.type == pygame.KEYDOWN and event.key == pygame.K_SPACE:
-                current_time = time()
-                board = play(board, side, side)
-                print("TIME TAKEN:", time() - current_time)
-                turn += 1
-                print(turn)
-                print("##############################################")
-                side *= -1
-                # elif event.type == pygame.MOUSEBUTTONDOWN:
-                #     piece = [int((coordinate - MARGIN) / TILE_SIZE) for coordinate in event.pos]
-                # elif event.type == pygame.MOUSEBUTTONUP:
-                #     move = [int((coordinate - MARGIN) / TILE_SIZE) for coordinate in event.pos]
-                #     print(move, piece)
-                #     board = apply_move(move, piece, board, side)
-                #     board = play(board, side * -1, side * -1)
-                #     print("##############################################")
-
-        DISPLAY.fill(BACKGROUND_COLOR)
-        draw_board(DISPLAY, PIECE_SPRITES, NUMBER_SPRITES, board)
-        pygame.display.update()
-
-if __name__ == '__main__':
-    main()
