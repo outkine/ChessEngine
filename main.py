@@ -422,4 +422,4 @@ def play(board, side, double_pawn, current_points=None, simulation_level=1):
                 return process_move(board, piece, move, side, move in passant_moves), update_double_pawn(piece, move, find_type(piece, board))
     if simulation_level != 1:
         return 0
-    return
+    return board, None
