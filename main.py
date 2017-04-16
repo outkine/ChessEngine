@@ -405,7 +405,7 @@ def play(board, side, double_pawn, current_points=None, simulation_level=1):
             else:
                 castle_directions = find_castle_directions(board, side, enemy_attacks)
                 if castle_directions:
-                    return castle(board, side, castle_directions[0])
+                    return castle(board, side, castle_directions[0]), None
                 end_points = {}
                 for piece in max_final_points:
                     piece_type = find_type(piece, board)
