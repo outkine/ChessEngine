@@ -1,6 +1,6 @@
 import pygame
 from spritesheet import BlockSheet
-from time import time
+# from time import time
 
 from main import play as play1
 from main import play as play2
@@ -46,7 +46,7 @@ NUMBER_GAP = 25
 SHOW_NUMBERS = False
 PLAYER_TILE_COLOR = (174, 126, 126)
 
-COMPUTER_SIDES = (1, -1)
+COMPUTER_SIDES = (1,)
 # COMPUTER_SIDES = ()
 COMPUTERS = (None, play1, play2)
 CONFIRM_TURN = False
@@ -85,13 +85,17 @@ def draw_board(display, piece_sprites, number_sprites, board, piece_tile):
                 display.blit(sprite, find_center(TILE_DIMENSIONS, sprite.get_size(), coordinates))
 
 def run(board, side, turn, double_pawn):
-    current_time = time()
-    board, double_pawn = COMPUTERS[side](board, side, double_pawn)
+    # current_time = time()
+    new_board, double_pawn = COMPUTERS[side](board, side, double_pawn)
+    if board == new_board:
+        stalemate = True
+    else:
+        stalemate = False
     # print(turn, side, time() - current_time)
-    print(time() - current_time)
+    # print(time() - current_time)
     # print("##############################################")
     turn, side = update(turn, side)
-    return board, side, turn, double_pawn
+    return new_board, side, turn, double_pawn, stalemate
 
 def update(turn, side):
     return turn + 1, side * -1
@@ -113,46 +117,49 @@ def main():
             if event.type == pygame.QUIT:
                 quit()
 
-        if side in COMPUTER_SIDES:
-            if not CONFIRM_TURN or pygame.key.get_pressed()[pygame.K_SPACE]:
-                board, side, turn, double_pawn = run(board, side, turn, double_pawn)
+        if side:
+            if side in COMPUTER_SIDES:
+                if not CONFIRM_TURN or pygame.key.get_pressed()[pygame.K_SPACE]:
+                    board, side, turn, double_pawn, stalemate = run(board, side, turn, double_pawn)
+                    if stalemate:
+                        side = False
 
-        else:
-            for event in events:
-                if event.type == pygame.MOUSEBUTTONDOWN:
-                    pos = tuple(convert_to_grid(event.pos))
-                    if find_state(pos, board) == side:
-                        piece = pos
-                elif event.type == pygame.MOUSEBUTTONUP:
-                    if piece:
-                        move = tuple(convert_to_grid(event.pos))
-                        piece_type = find_type(piece, board)
-                        if piece_type == 'p':
-                            moves, passant_moves = pawn_move(piece, board, side, double_pawn)
-                        else:
-                            moves = PIECE_MOVE_FUNCTIONS[piece_type](piece, board, side)
-                            passant_moves = []
-                        if move in moves:
-                            update_constants(board, side, piece)
-                            board = process_move(board, piece, move, side, move in passant_moves)
-                            double_pawn = update_double_pawn(piece, move, piece_type)
-                            turn, side = update(turn, side)
-                        elif piece_type == 'k' and move in KING_CASTLE_POSITIONS[side]:
-                            enemy_attacks = {}
-                            for y in BOARD_ITERATOR:
-                                for x in BOARD_ITERATOR:
-                                    if find_state((x, y), board) == side * -1:
-                                        attacks = PIECE_ATTACK_FUNCTIONS[piece_type]((x, y), board, side * -1)
-                                        if attacks:
-                                            for attack in attacks:
-                                                enemy_attacks.setdefault(attack, []).append((x, y))
-                            castle_directions = find_castle_directions(board, side, enemy_attacks)
-                            for direction in castle_directions:
-                                if KING_CASTLE_POSITIONS[side][direction] == move:
-                                    board = castle(board, side, direction)
-                                    turn, side = update(turn, side)
-                                    break
-                        piece = None
+            else:
+                for event in events:
+                    if event.type == pygame.MOUSEBUTTONDOWN:
+                        pos = tuple(convert_to_grid(event.pos))
+                        if find_state(pos, board) == side:
+                            piece = pos
+                    elif event.type == pygame.MOUSEBUTTONUP:
+                        if piece:
+                            move = tuple(convert_to_grid(event.pos))
+                            piece_type = find_type(piece, board)
+                            if piece_type == 'p':
+                                moves, passant_moves = pawn_move(piece, board, side, double_pawn)
+                            else:
+                                moves = PIECE_MOVE_FUNCTIONS[piece_type](piece, board, side)
+                                passant_moves = []
+                            if move in moves:
+                                update_constants(board, side, piece)
+                                board = process_move(board, piece, move, side, move in passant_moves)
+                                double_pawn = update_double_pawn(piece, move, piece_type)
+                                turn, side = update(turn, side)
+                            elif piece_type == 'k' and move in KING_CASTLE_POSITIONS[side]:
+                                enemy_attacks = {}
+                                for y in BOARD_ITERATOR:
+                                    for x in BOARD_ITERATOR:
+                                        if find_state((x, y), board) == side * -1:
+                                            attacks = PIECE_ATTACK_FUNCTIONS[piece_type]((x, y), board, side * -1)
+                                            if attacks:
+                                                for attack in attacks:
+                                                    enemy_attacks.setdefault(attack, []).append((x, y))
+                                castle_directions = find_castle_directions(board, side, enemy_attacks)
+                                for direction in castle_directions:
+                                    if KING_CASTLE_POSITIONS[side][direction] == move:
+                                        board = castle(board, side, direction)
+                                        turn, side = update(turn, side)
+                                        break
+                            piece = None
 
 if __name__ == '__main__':
     main()

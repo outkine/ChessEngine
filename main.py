@@ -327,94 +327,99 @@ def play(board, side, double_pawn, current_points=None, simulation_level=1):
                     if piece_type == 'k':
                         enemy_king = (x, y)
 
-    if simulation_level == MAX_SIMULATION_LEVEL:
-        # print(current_points, end=' ')
-        all_deep_exchange_points = []
-        for piece in moves:
-            piece_type = find_type(piece, board)
-            piece_points = PIECE_POINTS[piece_type]
-            for move in moves[piece]:
-                all_deep_exchange_points.append(
-                    analyze_exchanges(move, piece, piece_type, piece_points, board, ally_attacks, enemy_attacks, passant_moves)[1]
-                )
-        # print("MAX:", all_deep_exchange_points, max(all_deep_exchange_points))
-        return (current_points + max(all_deep_exchange_points)) * -1
-
-    else:
-        final_moves = {}
-        all_exchange_points = {}
-
-        # print(current_points, "SIMULATED POINTS: ", end='')
-        for piece in moves:
-            piece_type = find_type(piece, board)
-            piece_points = PIECE_POINTS[piece_type]
-            for move in moves[piece]:
-                exchange_points, deep_exchange_points = analyze_exchanges(move, piece, piece_type, piece_points, board,
-                                                                          ally_attacks, enemy_attacks, passant_moves)
-                # print(piece, move, exchange_points, deep_exchange_points, end=' ')
-                if exchange_points == PIECE_POINTS['k']:
-                    return (current_points + PIECE_POINTS['k']) * -1
-                elif deep_exchange_points >= 0:
-                    final_moves.setdefault(piece, []).append(move)
-                    all_exchange_points[move] = exchange_points
-        # print()
-
-        if simulation_level > 1:
-            final_points = []
-            # # print("SIMULATED POINTS:", final_moves)
-            for piece in final_moves:
-                for move in final_moves[piece]:
-                    # print(piece, move, end=' ')
-                    # noinspection PyTypeChecker
-                    final_points.append(
-                        play(process_move(board, piece, move, side, move in passant_moves), side * -1, update_double_pawn(piece, move, find_type(piece, board)),
-                             (current_points + all_exchange_points[move]) * -1, simulation_level + 1)
+    if moves:
+        if simulation_level == MAX_SIMULATION_LEVEL:
+            # print(current_points, end=' ')
+            all_deep_exchange_points = []
+            for piece in moves:
+                piece_type = find_type(piece, board)
+                piece_points = PIECE_POINTS[piece_type]
+                for move in moves[piece]:
+                    all_deep_exchange_points.append(
+                        analyze_exchanges(move, piece, piece_type, piece_points, board, ally_attacks, enemy_attacks, passant_moves)[1]
                     )
-            return max(final_points) * -1
+            # print("MAX:", all_deep_exchange_points, max(all_deep_exchange_points))
+            return (current_points + max(all_deep_exchange_points)) * -1
 
         else:
 
-            # move_number = 0
-            # for piece in final_moves:
-            #     move_number += len(final_moves[piece])
-            # for number, level in MAX_SIMULATION_LEVELS:
-            #     if move_number >= number:
-            #         max_level = level
-            #         break
-            # print(move_number, max_level)
-            current_points = analyze_board(board, side)
-            # print(current_points)
-            final_points = {}
+            final_moves = {}
+            all_exchange_points = {}
 
-            for piece in final_moves:
-                for move in final_moves[piece]:
-                    # print('PIECE:', piece, move, 'move,',
-                    #   all_exchange_points[move] * base_side * side, "exchange points")
-                    # noinspection PyTypeChecker
-                    temp_points = play(process_move(board, piece, move, side, move in passant_moves), side * -1,
-                                       update_double_pawn(piece, move, find_type(piece, board)), (current_points + all_exchange_points[move]) * -1,
-                                       simulation_level + 1)
-                    # print(temp_points, "final points")
-                    final_points.setdefault(temp_points, {}).setdefault(piece, []).append(move)
+            # print(current_points, "SIMULATED POINTS: ", end='')
+            for piece in moves:
+                piece_type = find_type(piece, board)
+                piece_points = PIECE_POINTS[piece_type]
+                for move in moves[piece]:
+                    exchange_points, deep_exchange_points = analyze_exchanges(move, piece, piece_type, piece_points, board,
+                                                                              ally_attacks, enemy_attacks, passant_moves)
+                    # print(piece, move, exchange_points, deep_exchange_points, end=' ')
+                    if exchange_points == PIECE_POINTS['k']:
+                        return (current_points + PIECE_POINTS['k']) * -1
+                    elif deep_exchange_points >= 0:
+                        final_moves.setdefault(piece, []).append(move)
+                        all_exchange_points[move] = exchange_points
+            # print()
 
-            # print(final_points)
-            max_final_points = final_points[max(final_points)]
-            if len(max_final_points.values()) == 1:
-                piece, move = list(max_final_points.items())[0]
-                move = move[0]
+            if simulation_level > 1:
+                final_points = []
+                # # print("SIMULATED POINTS:", final_moves)
+                for piece in final_moves:
+                    for move in final_moves[piece]:
+                        # print(piece, move, end=' ')
+                        # noinspection PyTypeChecker
+                        final_points.append(
+                            play(process_move(board, piece, move, side, move in passant_moves), side * -1, update_double_pawn(piece, move, find_type(piece, board)),
+                                 (current_points + all_exchange_points[move]) * -1, simulation_level + 1)
+                        )
+                return max(final_points) * -1
+
             else:
-                castle_directions = find_castle_directions(board, side, enemy_attacks)
-                if castle_directions:
-                    return castle(board, side, castle_directions[0]), None
-                end_points = {}
-                for piece in max_final_points:
-                    piece_type = find_type(piece, board)
-                    distance_to_king = distance(piece, enemy_king)
-                    for move in max_final_points[piece]:
-                        end_points[analyze_movement(move, piece, piece_type, enemy_king, distance_to_king)] = (
-                            piece, move)
-                        # print(end_points)
-                piece, move = end_points[max(end_points)]
 
-            update_constants(board, side, piece)
-            return process_move(board, piece, move, side, move in passant_moves), update_double_pawn(piece, move, find_type(piece, board))
+                # move_number = 0
+                # for piece in final_moves:
+                #     move_number += len(final_moves[piece])
+                # for number, level in MAX_SIMULATION_LEVELS:
+                #     if move_number >= number:
+                #         max_level = level
+                #         break
+                # print(move_number, max_level)
+                current_points = analyze_board(board, side)
+                # print(current_points)
+                final_points = {}
+
+                for piece in final_moves:
+                    for move in final_moves[piece]:
+                        # print('PIECE:', piece, move, 'move,',
+                        #   all_exchange_points[move] * base_side * side, "exchange points")
+                        # noinspection PyTypeChecker
+                        temp_points = play(process_move(board, piece, move, side, move in passant_moves), side * -1,
+                                           update_double_pawn(piece, move, find_type(piece, board)), (current_points + all_exchange_points[move]) * -1,
+                                           simulation_level + 1)
+                        # print(temp_points, "final points")
+                        final_points.setdefault(temp_points, {}).setdefault(piece, []).append(move)
+
+                # print(final_points)
+                max_final_points = final_points[max(final_points)]
+                if len(max_final_points.values()) == 1:
+                    piece, move = list(max_final_points.items())[0]
+                    move = move[0]
+                else:
+                    castle_directions = find_castle_directions(board, side, enemy_attacks)
+                    if castle_directions:
+                        return castle(board, side, castle_directions[0]), None
+                    end_points = {}
+                    for piece in max_final_points:
+                        piece_type = find_type(piece, board)
+                        distance_to_king = distance(piece, enemy_king)
+                        for move in max_final_points[piece]:
+                            end_points[analyze_movement(move, piece, piece_type, enemy_king, distance_to_king)] = (
+                                piece, move)
+                            # print(end_points)
+                    piece, move = end_points[max(end_points)]
+
+                update_constants(board, side, piece)
+                return process_move(board, piece, move, side, move in passant_moves), update_double_pawn(piece, move, find_type(piece, board))
+    if simulation_level != 1:
+        return 0
+    return
